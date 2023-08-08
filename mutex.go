@@ -34,6 +34,11 @@ func (me *Mutex) Lock() {
 	me.lastLockId = lockId
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Println("LOCKRECOVER", stack, r)
+			}
+		}()
 		time.Sleep(10 * time.Second)
 		if me == nil {
 			fmt.Println("LOCKNIL", stack)
