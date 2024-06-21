@@ -49,7 +49,10 @@ func (me *Mutex) Lock() {
 			return
 		}
 		// still lock
-		fmt.Println("LOCK HOLD MORE THAN 10 sec", stack)
+		for i := 0; i < 100; i++ {
+			fmt.Println(i, "LOCK HOLD MORE THAN 10 sec", stack)
+			time.Sleep(10 * time.Second)
+		}
 	}()
 }
 
