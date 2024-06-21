@@ -22,43 +22,77 @@ func generateID() string {
 	return sb.String()
 }
 
-type Mutex struct {
-	lastLockId string
-	mux        sync.Mutex
-}
+var g_lock = &sync.Mutex{}
+var g_holdingLockM = map[string]int64{}
+var g_holdingStackM = map[string]string{}
 
-func (me *Mutex) Lock() {
-	lockId := generateID()
-	stack := getStack(3)
-	me.mux.Lock()
-	me.lastLockId = lockId
-
+func init() {
 	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Println("LOCKRECOVER", stack, r)
+		for {
+			time.Sleep(5 * time.Second)
+			tooLooong := []string{}
+			g_lock.Lock()
+			now := time.Now().Unix()
+			for id, lockAtSec := range g_holdingLockM {
+				if now-lockAtSec > 10 {
+					stack := g_holdingStackM[id]
+					tooLooong = append(tooLooong, strconv.Itoa(int(now-lockAtSec))+" sec:"+stack)
+				}
 			}
-		}()
-		time.Sleep(10 * time.Second)
-		if me == nil {
-			fmt.Println("LOCKNIL", stack)
-			return
+			g_lock.Unlock()
+			for _, l := range tooLooong {
+				fmt.Println("ERR LOCK HOLD MORE THAN", l)
+			}
 		}
+	}()
 
-		if me.lastLockId != lockId {
-			return
-		}
-		// still lock
-		for i := 0; i < 100; i++ {
-			fmt.Println(i, "LOCK HOLD MORE THAN 10 sec", stack)
-			time.Sleep(10 * time.Second)
+	// clean map
+	go func() {
+		for {
+			time.Sleep(10 * time.Minute)
+			var new_holdingLockM = map[string]int64{}
+			var new_holdingStackM = map[string]string{}
+			g_lock.Lock()
+			for id, lockedAt := range g_holdingLockM {
+				if lockedAt <= 0 {
+					continue
+				}
+				new_holdingLockM[id] = lockedAt
+				new_holdingStackM[id] = g_holdingStackM[id]
+			}
+			g_holdingStackM = new_holdingStackM
+			g_holdingLockM = new_holdingLockM
+			g_lock.Unlock()
 		}
 	}()
 }
 
-func (me *Mutex) Unlock() {
-	me.lastLockId = ""
+type Mutex struct {
+	mux sync.Mutex
+	id  string // internal identification. Generated after the first lock
+}
 
+func (me *Mutex) Lock() {
+	stack := getStack(3)
+
+	me.mux.Lock()
+	var lockId = me.id
+	if me.id == "" {
+		lockId = generateID()
+		me.id = lockId
+	}
+	now := time.Now().Unix()
+
+	g_lock.Lock()
+	g_holdingStackM[lockId] = stack
+	g_holdingLockM[lockId] = now
+	g_lock.Unlock()
+}
+
+func (me *Mutex) Unlock() {
+	g_lock.Lock()
+	g_holdingLockM[me.id] = 0
+	g_lock.Unlock()
 	me.mux.Unlock()
 }
 
@@ -80,7 +114,7 @@ func getStack(skip int) string {
 		if first == -1 {
 			first = i
 		} else {
-			sb.WriteString(" -> ")
+			sb.WriteString(";")
 		}
 		sb.WriteString(file + ":" + strconv.Itoa(line))
 	}

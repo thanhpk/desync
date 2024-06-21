@@ -20,6 +20,9 @@ func TestMutex(t *testing.T) {
 	mu := &Mutex{}
 	go quick(mu)
 	go long(mu)
+	go long(mu)
 	quick(mu)
+	long(mu)
+	long(mu)
 	long(mu)
 }
