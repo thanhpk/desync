@@ -34,6 +34,9 @@ func init() {
 			g_lock.Lock()
 			now := time.Now().Unix()
 			for id, lockAtSec := range g_holdingLockM {
+				if lockAtSec == 0 {
+					continue
+				}
 				if now-lockAtSec > 10 {
 					stack := g_holdingStackM[id]
 					tooLooong = append(tooLooong, strconv.Itoa(int(now-lockAtSec))+" sec:"+stack)
